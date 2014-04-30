@@ -20,30 +20,35 @@ internals.scheme = function (server, options) {
 };
 
 internals.authenticate = function (request, reply) {
-  var authorization = request.headers.authorization,
+  var header,
     parts,
     scheme,
     credentials,
     client,
     secret;
 
-  if (!authorization) {
-    return reply('No authorization header.');
+  if (request.headers.authorization) {
+    // Find credentials in the header
+    authorization = request.headers.authorization;
+    parts = authorization.split(' ');
+    if (parts.length < 2) {
+      return reply('Invalid authorization header.');
+    }
+
+    scheme = parts[0];
+    credentials = new Buffer(parts[1], 'base64').toString().split(':');
+    client = credentials[0];
+    secret = credentials[1];
+  } else if (request.body.client_id && request.body.client_secret) {
+    // Find credentials in the body
+    client = request.body.client_id;
+    secret = request.body.client_secret;
+  } else {
+    return reply('No authorization credentials.');
   }
-
-  parts = authorization.split(' ');
-  if (parts.length < 2) {
-    return reply('Invalid authorization header.');
-  }
-
-  scheme = parts[0];
-  credentials = new Buffer(parts[1], 'base64').toString().split(':');
-
-  client = credentials[0];
-  secret = credentials[1];
 
   if (!client || !secret) {
-    return reply('Invalid authorization header.');
+    return reply('Invalid authorization credentials.');
   }
 
   internals.verify(client, secret, function (err, user, info) {
