@@ -39,10 +39,10 @@ internals.authenticate = function (request, reply) {
     credentials = new Buffer(parts[1], 'base64').toString().split(':');
     client = credentials[0];
     secret = credentials[1];
-  } else if (request.body.client_id && request.body.client_secret) {
+  } else if (request.payload.client_id && request.payload.client_secret) {
     // Find credentials in the body
-    client = request.body.client_id;
-    secret = request.body.client_secret;
+    client = request.payload.client_id;
+    secret = request.payload.client_secret;
   } else {
     return reply('No authorization credentials.');
   }
