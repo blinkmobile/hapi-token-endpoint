@@ -15,7 +15,8 @@ exports.register = function (plugin, options, next) {
 
 internals.scheme = function (server, options) {
   return {
-    authenticate: internals.authenticate
+    authenticate: internals.authenticate,
+    payload: internals.payload
   };
 };
 
@@ -28,7 +29,6 @@ internals.authenticate = function (request, reply) {
     secret;
 
   if (request.headers.authorization) {
-    // Find credentials in the header
     authorization = request.headers.authorization;
     parts = authorization.split(' ');
     if (parts.length < 2) {
@@ -39,30 +39,57 @@ internals.authenticate = function (request, reply) {
     credentials = new Buffer(parts[1], 'base64').toString().split(':');
     client = credentials[0];
     secret = credentials[1];
-  } else if (request.payload.client_id && request.payload.client_secret) {
-    // Find credentials in the body
+
+    if (!client || !secret) {
+      return reply('Invalid authorization credentials.');
+    }
+
+    reply(null, internals.process(client, secret));
+  } else {
+    reply(null, {credentials: 'deferred'})
+  } 
+
+};
+
+internals.payload = function (request, next) {
+  var client, secret, response;
+
+  if (request.auth.credentials === 'deferred' && request.payload.client_id && request.payload.client_secret) {
     client = request.payload.client_id;
     secret = request.payload.client_secret;
   } else {
-    return reply('No authorization credentials.');
+    return next(false);
+  }
+  
+  response = internals.process(client, secret);
+
+  if (response instanceof Error) {
+    return next(response);
   }
 
-  if (!client || !secret) {
-    return reply('Invalid authorization credentials.');
+  if (response instanceof String) {
+    return next(response);
   }
 
+  if (!response.credentials) {
+    return next(false);
+  }
+  
+  next();
+}
+
+internals.process = function (client, secret) {
   internals.verify(client, secret, function (err, user, info) {
     info = info || {};
 
     if (err) {
-      return reply(internals.error.unauthorized(err));
+      return internals.error.unauthorized(err);
     }
 
     if (!user) {
-      return reply(info.message || 'Unable to verify credentials');
+      return info.message || 'Unable to verify credentials';
     }
 
-    reply(null, {credentials: user, artifacts: info});
+    return {credentials: user, artifacts: info};
   });
-};
-
+}
